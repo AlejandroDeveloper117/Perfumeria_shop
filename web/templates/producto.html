@@ -2,7 +2,6 @@
 {% block content %}
     <ul class="b-crumbs">
         <li><a href="/">Inicio</a></li>
-        <li><a href="/">Catalogo</a></li>
         <li>Producto</li>
     </ul>
     <article>
@@ -71,7 +70,7 @@
                 <p class="prod-price">{{producto.precio}}</p>
                 <p class="prod-excerpt">{{producto.descripcion}}
                 <div class="prod-add">
-                    <form action="#" method="post">
+                    <form action="{% url 'web:agregarCarrito' producto.id %}" method="post">
                         {% csrf_token %}
                         <div class="variations">
                             <div class="variations-row">
