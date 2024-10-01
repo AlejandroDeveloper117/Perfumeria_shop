@@ -1,3 +1,5 @@
 django==4.2
 pillow
 mysqlclient
+django-admin-tailwind
+django-paypal
