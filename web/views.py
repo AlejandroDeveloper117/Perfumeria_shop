@@ -4,6 +4,8 @@ from django.urls import reverse
 """ Vistas para el catalogo de productos"""
 from .models import Categoria, Producto, Cliente, Pedido, PedidoDetalle
 
+
+from paypal.standard.forms import PayPalPaymentsForm
 # Create your views here.
 
 
@@ -247,3 +249,100 @@ def registrarPedido(request):
     }
 
     return render(request,'pedido.html',context)
+# Prueba de paypal
+from paypal.standard.forms import PayPalPaymentsForm
+
+
+@login_required(login_url='/login')
+def confirmarPedido(request):
+    context = {}
+    if request.method == 'POST':
+        #Actulizar usuario
+        actUsuario = User.objects.get(pk=request.user.id)
+        actUsuario.first_name = request.POST['nombre']
+        actUsuario.last_name = request.POST['apellidos']
+        actUsuario.save()
+        #registramos o actulizamos cliente
+        try:
+            clientePedido = Cliente.objects.get(usuario=request.user)
+            clientePedido.telefono = request.POST['telefono']
+            clientePedido.direccion = request.POST['direccion']
+            clientePedido.save()
+        except:
+            clientePedido = Cliente()
+            clientePedido.usuario = actUsuario
+            clientePedido.direccion = request.POST['direccion']
+            clientePedido.telefono = request.POST['telefono']
+            clientePedido.save()
+        #REGISTRAMOS NUEVO PEDIDO
+        nroPedido = ''
+        montoTotal = float(request.session.get('cartMontoTotal'))
+        nuevoPedido = Pedido()
+        nuevoPedido.cliente = clientePedido
+        nuevoPedido.save()
+
+        #registramos el detalle del pedido
+        carritoPedido = request.session.get('cart')
+        for key,value in carritoPedido.items():
+            productoPedido = Producto.objects.get(pk=value['producto_id'])
+            detalle = PedidoDetalle()
+            detalle.pedido = nuevoPedido
+            detalle.Producto = productoPedido
+            detalle.cantidad = int(value['cantidad'])
+            detalle.subtotal = float(value['subtotal'])
+            detalle.save()
+
+        #actualizar pedido
+        nroPedido = 'PED' + nuevoPedido.fecha_registro.strftime('%Y') + str(nuevoPedido.id)
+        nuevoPedido.nro_pedido = nroPedido
+        nuevoPedido.monto_total = montoTotal
+        nuevoPedido.save()
+
+        #registar pedido de session para el pedido
+        request.session['pedidoId'] = nuevoPedido.id
+
+        #creamosun boton de paypal
+        paypal_dict = {
+        "business": "sb-l2kvw32683138@business.example.com",
+        "amount": montoTotal,
+        "item_name": "PEDIDO CODIGO : "+ nroPedido,
+        "invoice": nroPedido,
+        "notify_url": request.build_absolute_uri(reverse('paypal-ipn')),
+        "return": request.build_absolute_uri('/gracias'),
+        "cancel_return": request.build_absolute_uri('/'),
+        }
+
+    # Create the instance.
+    formPaypal = PayPalPaymentsForm(initial=paypal_dict)
+        
+         
+    context = {
+        'pedido': nuevoPedido,
+        'formPaypal': formPaypal
+
+    }
+    #limpiamos carrito de compraas
+    carrito = Cart(request)
+    carrito.clear()
+
+
+    return render(request,'compra.html', context)
+
+
+login_required(login_url='/login')
+def gracias(request):
+    paypalId = request.GET.get('PayerID',None)
+    context = {}
+    if paypalId is not None:
+        pedidoId = request.session.get('pedidoId')
+        pedido = Pedido.objects.get(pk=pedidoId)
+        pedido.estado = '1'
+        pedido.save()
+        
+        context = {
+            'pedido':pedido
+        }
+    else:
+        return redirect('/')
+        
+    return render(request,'gracias.html',context)
